@@ -43,8 +43,70 @@ function toEmbedUrl(raw: string): string {
   return url
 }
 
+/** Check if a URL is an Instagram post/reel */
+function getInstagramId(raw: string): string | null {
+  if (!raw) return null
+  const m = raw.trim().match(/instagram\.com\/(?:p|reel|tv)\/([\w-]+)/)
+  return m ? m[1] : null
+}
+
+/** Check if a URL is a Twitter/X post */
+function getTweetId(raw: string): string | null {
+  if (!raw) return null
+  const m = raw.trim().match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/)
+  return m ? m[1] : null
+}
+
+/** Twitter/X embed component — uses their blockquote + widgets.js approach */
+function TweetEmbed({ tweetId, url }: { tweetId: string; url: string }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    containerRef.current.innerHTML = `
+      <blockquote class="twitter-tweet" data-conversation="none">
+        <a href="${url.replace(/x\.com/, 'twitter.com')}">Loading…</a>
+      </blockquote>
+    `
+    const win = window as any
+    if (win.twttr && win.twttr.widgets) {
+      win.twttr.widgets.load(containerRef.current)
+    } else {
+      const script = document.createElement('script')
+      script.src = 'https://platform.twitter.com/widgets.js'
+      script.async = true
+      document.body.appendChild(script)
+    }
+  }, [tweetId, url])
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full overflow-auto bg-white"
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    />
+  )
+}
+
+/** Instagram embed component — uses Instagram's /embed endpoint in an iframe */
+function InstagramEmbed({ shortcode }: { url: string; shortcode: string }) {
+  return (
+    <iframe
+      src={`https://www.instagram.com/p/${shortcode}/embed/`}
+      className="w-full h-full border-none"
+      allowTransparency
+      allow="encrypted-media"
+      title="Instagram embed"
+      style={{ background: 'white', minHeight: 400 }}
+    />
+  )
+}
+
 export default function IframeNode({ id, data, selected }: NodeProps) {
   const updateNode = useFlowStore((s) => s.updateNode)
+  const enableDragSelected = useFlowStore((s) => s.enableDragSelected)
+  const disableDragAll = useFlowStore((s) => s.disableDragAll)
+  const snapshot = useFlowStore((s) => s.snapshot)
   const globalShowOutline = useFlowStore((s) => s.showOutline)
   const outline = data?.showOutline ?? globalShowOutline
   const [hovered, setHovered] = useState(false)
@@ -54,6 +116,8 @@ export default function IframeNode({ id, data, selected }: NodeProps) {
   const setIsEditing = useFlowStore((s) => s.setIsEditing)
 
   const embedUrl = toEmbedUrl(data?.url || '')
+  const instagramId = getInstagramId(data?.url || '')
+  const tweetId = getTweetId(data?.url || '')
   const width = data?.width || 480
   const height = data?.height || 320
 
@@ -153,10 +217,10 @@ export default function IframeNode({ id, data, selected }: NodeProps) {
       className="relative p-0 bg-transparent rounded border-none shadow-none"
     >
       {/* Edge drag handles */}
-      <div className="node-edge-handle top" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
-      <div className="node-edge-handle bottom" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
-      <div className="node-edge-handle left" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
-      <div className="node-edge-handle right" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle top" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle bottom" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle left" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle right" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
 
       {/* Toolbar */}
       {(hovered || selected) ? (
@@ -205,7 +269,11 @@ export default function IframeNode({ id, data, selected }: NodeProps) {
 
       {/* Iframe content */}
       <div className="h-full w-full bg-white overflow-hidden" onPointerDown={(e) => e.stopPropagation()}>
-        {data?.url ? (
+        {data?.url && instagramId ? (
+          <InstagramEmbed url={data.url} shortcode={instagramId} />
+        ) : data?.url && tweetId ? (
+          <TweetEmbed tweetId={tweetId} url={data.url} />
+        ) : data?.url ? (
           <>
             {loadError ? (
               <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-slate-300 text-xs gap-3 p-4 text-center">

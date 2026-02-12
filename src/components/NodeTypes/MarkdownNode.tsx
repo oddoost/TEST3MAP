@@ -7,6 +7,9 @@ import { GRID_DOT_COLOR } from '../../config'
 export default function MarkdownNode(props: NodeProps) {
   const { id, data, selected } = props
   const updateNode = useFlowStore((s) => s.updateNode)
+  const enableDragSelected = useFlowStore((s) => s.enableDragSelected)
+  const disableDragAll = useFlowStore((s) => s.disableDragAll)
+  const snapshot = useFlowStore((s) => s.snapshot)
   const globalShowOutline = useFlowStore((s) => s.showOutline)
   const showOutline = data?.showOutline ?? globalShowOutline
   const [hovered, setHovered] = useState(false)
@@ -95,10 +98,10 @@ export default function MarkdownNode(props: NodeProps) {
     >
 
       {/* Edge drag handles (top/bottom/left/right) - dragging only enabled when dragging from these */}
-      <div className="node-edge-handle top" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
-      <div className="node-edge-handle bottom" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
-      <div className="node-edge-handle left" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
-      <div className="node-edge-handle right" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle top" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle bottom" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle left" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle right" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
 
       {/* Top-centered controls positioned above node border */}
       <div className="absolute top-[-36px] left-1/2 transform -translate-x-1/2 flex gap-1 z-50 pointer-events-auto" onPointerDown={(e) => e.stopPropagation()}>

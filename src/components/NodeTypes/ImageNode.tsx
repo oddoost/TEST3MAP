@@ -3,8 +3,19 @@ import { Handle, Position, NodeProps } from 'reactflow'
 import { useFlowStore } from '../../store'
 import { GRID_DOT_COLOR } from '../../config'
 
+const VIDEO_EXTENSIONS = /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i
+const VIDEO_DATA_PREFIX = /^data:video\//i
+
+function isVideoSrc(src: string): boolean {
+  if (!src) return false
+  return VIDEO_EXTENSIONS.test(src) || VIDEO_DATA_PREFIX.test(src)
+}
+
 export default function ImageNode({ id, data, selected }: NodeProps) {
   const updateNode = useFlowStore((s) => s.updateNode)
+  const enableDragSelected = useFlowStore((s) => s.enableDragSelected)
+  const disableDragAll = useFlowStore((s) => s.disableDragAll)
+  const snapshot = useFlowStore((s) => s.snapshot)
   const globalShowOutline = useFlowStore((s) => s.showOutline)
   const outline = data?.showOutline ?? globalShowOutline
   const [hovered, setHovered] = useState(false)
@@ -82,10 +93,10 @@ export default function ImageNode({ id, data, selected }: NodeProps) {
     <div style={{ width, height }} onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} className={`relative p-0 bg-transparent rounded border-none shadow-none ${outline ? '' : ''}`}>
 
       {/* Edge drag handles (top/bottom/left/right) - dragging only enabled when dragging from these */}
-      <div className="node-edge-handle top" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
-      <div className="node-edge-handle bottom" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
-      <div className="node-edge-handle left" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
-      <div className="node-edge-handle right" onPointerDown={(e) => { e.stopPropagation(); updateNode(id, { draggable: true }); window.addEventListener('pointerup', function __up(){ updateNode(id, { draggable: false }); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle top" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle bottom" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle left" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
+      <div className="node-edge-handle right" onPointerDown={(e) => { e.stopPropagation(); snapshot(); enableDragSelected(id); window.addEventListener('pointerup', function __up(){ disableDragAll(); window.removeEventListener('pointerup', __up) }) }} />
 
       { (hovered || selected) ? (
     <div className="absolute top-[-36px] left-1/2 transform -translate-x-1/2 flex gap-1 z-50 pointer-events-auto" onPointerDown={(e) => e.stopPropagation()}>
@@ -106,9 +117,30 @@ export default function ImageNode({ id, data, selected }: NodeProps) {
 
       <div className="h-full w-full flex items-center justify-center bg-transparent overflow-hidden" onPointerDown={(e) => e.stopPropagation()}>
         {data?.src ? (
-          <img onMouseDown={(e) => { e.stopPropagation() }} onPointerDown={(e) => { e.stopPropagation() }} onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleShow(e) }} src={data.src} alt="node-img" className="w-full h-full object-contain" />
+          isVideoSrc(data.src) ? (
+            <video
+              onMouseDown={(e) => { e.stopPropagation() }}
+              onPointerDown={(e) => { e.stopPropagation() }}
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleShow(e) }}
+              src={data.src}
+              className="w-full h-full object-contain"
+              controls
+              loop
+              muted
+              playsInline
+            />
+          ) : (
+            <img
+              onMouseDown={(e) => { e.stopPropagation() }}
+              onPointerDown={(e) => { e.stopPropagation() }}
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleShow(e) }}
+              src={data.src}
+              alt="node-img"
+              className="w-full h-full object-contain"
+            />
+          )
         ) : (
-          <div onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleShow(e) }} className="text-slate-400 text-sm">No image</div>
+          <div onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleShow(e) }} className="text-slate-400 text-sm">No media</div>
         )}
       </div>
 
@@ -123,7 +155,7 @@ export default function ImageNode({ id, data, selected }: NodeProps) {
             onFocus={(e) => { setEditing(true); setIsEditing(true); updateNode(id, { draggable: false }) }}
             onBlur={(e) => { setEditing(false); setIsEditing(false); updateNode(id, { draggable: false }) }}
             onChange={(e) => updateNode(id, { src: e.target.value })}
-            placeholder="Image URL"
+            placeholder="Image, GIF, SVG, or video URL"
           />
         </div>
       ) : null}

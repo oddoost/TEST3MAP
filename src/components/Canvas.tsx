@@ -30,6 +30,10 @@ export default function Canvas() {
   const addNode = useFlowStore((s) => s.addNode)
   const addEdgeStore = useFlowStore((s) => s.addEdge)
   const exportJSON = useFlowStore((s) => s.exportJSON)
+  const importJSON = useFlowStore((s) => s.importJSON)
+  const undo = useFlowStore((s) => s.undo)
+  const redo = useFlowStore((s) => s.redo)
+  const snapshot = useFlowStore((s) => s.snapshot)
   const save = useFlowStore((s) => s.save)
   const showOutline = useFlowStore((s) => s.showOutline)
   const toggleShowOutline = useFlowStore((s) => s.toggleShowOutline)
@@ -127,7 +131,7 @@ export default function Canvas() {
     const files = event.dataTransfer?.files
     if (files && files.length > 0) {
       const file = files[0]
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
         const reader = new FileReader()
         reader.onload = () => {
           const src = reader.result as string
@@ -151,32 +155,36 @@ export default function Canvas() {
     }
   }, [addNode])
 
+  /** Get the center of the current viewport in flow coordinates */
+  function getViewportCenter() {
+    const bounds = reactFlowWrapper.current?.getBoundingClientRect()
+    const rf = rfInstanceRef.current
+    if (bounds && rf) {
+      return rf.project({ x: bounds.width / 2, y: bounds.height / 2 })
+    }
+    return { x: 250, y: 150 }
+  }
+
   function createMarkdownNode() {
-    console.log('createMarkdownNode called')
     const id = `md_${Date.now()}`
+    const center = getViewportCenter()
     const node = {
       id,
       type: 'markdown',
-      position: { x: 250, y: 150 },
+      position: { x: center.x - 150, y: center.y - 60 },
       data: { content: '# New note', id },
       draggable: false,
     }
-    try {
-      addNode(node as any)
-      // debug: log current store state
-      try { console.log('store nodes after add:', useFlowStore.getState().nodes) } catch (e) { console.error(e) }
-    } catch (err) {
-      console.error('createMarkdownNode internal error', err)
-      throw err
-    }
+    addNode(node as any)
   }
 
   function createIframeNode() {
     const id = `iframe_${Date.now()}`
+    const center = getViewportCenter()
     const node = {
       id,
       type: 'iframe',
-      position: { x: 300, y: 200 },
+      position: { x: center.x - 240, y: center.y - 160 },
       data: { url: '', id },
       draggable: false,
     }
@@ -184,23 +192,16 @@ export default function Canvas() {
   }
 
   function createImageNode() {
-    console.log('createImageNode called')
     const id = `img_${Date.now()}`
+    const center = getViewportCenter()
     const node = {
       id,
       type: 'image',
-      position: { x: 350, y: 250 },
-      data: { src: 'https://picsum.photos/200', id },
+      position: { x: center.x - 110, y: center.y - 80 },
+      data: { src: '', id },
       draggable: false,
     }
-    try {
-      addNode(node as any)
-      // debug: log current store state
-      try { console.log('store nodes after add:', useFlowStore.getState().nodes) } catch (e) { console.error(e) }
-    } catch (err) {
-      console.error('createImageNode internal error', err)
-      throw err
-    }
+    addNode(node as any)
   }
 
   function handleAddMarkdown() {
@@ -250,6 +251,15 @@ export default function Canvas() {
     }
   }
 
+  function handleImportClick() {
+    try {
+      importJSON()
+    } catch (err) {
+      console.error('importJSON error', err)
+      alert('Error importing — see console')
+    }
+  }
+
   // Copy / Paste keyboard handler
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -257,6 +267,18 @@ export default function Canvas() {
       // Don't intercept if user is typing in an input/textarea
       const tag = (e.target as HTMLElement)?.tagName
       if (tag === 'TEXTAREA' || tag === 'INPUT') return
+
+      if (meta && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+        return
+      }
+
+      if (meta && e.key === 'z' && e.shiftKey) {
+        e.preventDefault()
+        redo()
+        return
+      }
 
       if (meta && e.key === 'c') {
         const selected = useFlowStore.getState().nodes.filter((n) => n.selected)
@@ -269,6 +291,7 @@ export default function Canvas() {
         const clip = clipboardRef.current
         if (clip.length === 0) return
         e.preventDefault()
+        snapshot()
         const now = Date.now()
         // Deselect all current nodes
         setNodes((prev) => prev.map((n) => ({ ...n, selected: false })))
@@ -290,7 +313,7 @@ export default function Canvas() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [addNode, setNodes])
+  }, [addNode, setNodes, undo, redo])
 
   useEffect(() => {
     // autosave every 5s
@@ -339,7 +362,10 @@ export default function Canvas() {
           fitView
           panOnScroll
           zoomOnScroll
-          panOnDrag={!isEditing}
+          panOnDrag={isEditing ? false : locked ? true : [1, 2]}
+          selectionOnDrag={!isEditing && !locked}
+          selectionMode={'partial' as any}
+          multiSelectionKeyCode="Shift"
           nodesDraggable={!locked}
           nodesConnectable={!locked}
           elementsSelectable={!locked}
@@ -396,6 +422,12 @@ export default function Canvas() {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                   <path d="M17 21v-8H7v8" />
+                </svg>
+              </button>
+
+              <button onClick={handleImportClick} className="icon-btn" title="Open JSON">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                 </svg>
               </button>
 

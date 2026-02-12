@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   addEdge,
   applyNodeChanges,
@@ -46,6 +46,40 @@ export default function Canvas() {
   const locked = useFlowStore((s) => s.locked)
   const toggleLocked = useFlowStore((s) => s.toggleLocked)
   const setShowDesc = useFlowStore((s) => s.setShowDesc)
+  const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight })
+
+  // Calculate minZoom so you can never zoom out past fitting all nodes
+  const minZoom = useMemo(() => {
+    if (nodes.length === 0) return 0.1
+    const padding = 100
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const node of nodes) {
+      const w = node.data?.width || node.width || 300
+      const h = node.data?.height || node.height || 120
+      minX = Math.min(minX, node.position.x)
+      minY = Math.min(minY, node.position.y)
+      maxX = Math.max(maxX, node.position.x + w)
+      maxY = Math.max(maxY, node.position.y + h)
+    }
+    const contentW = maxX - minX + padding * 2
+    const contentH = maxY - minY + padding * 2
+    const zoomX = viewportSize.w / contentW
+    const zoomY = viewportSize.h / contentH
+    // Allow zooming out 30% beyond the fit-all level for breathing room
+    return Math.min(zoomX, zoomY, 1) * 0.7
+  }, [nodes, viewportSize])
+
+  // Track viewport size for minZoom calculation
+  useEffect(() => {
+    const el = reactFlowWrapper.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect
+      setViewportSize({ w: width, h: height })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     if (locked) return
@@ -360,6 +394,7 @@ export default function Canvas() {
           onMoveStart={() => setShowDesc(false)}
           nodeTypes={nodeTypes}
           fitView
+          minZoom={minZoom}
           panOnScroll
           zoomOnScroll
           panOnDrag={isEditing ? false : locked ? true : [1, 2]}

@@ -47,6 +47,8 @@ export default function Canvas() {
   const toggleLocked = useFlowStore((s) => s.toggleLocked)
   const setShowDesc = useFlowStore((s) => s.setShowDesc)
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight })
+  const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement)
+  const [lockUsedInFullscreen, setLockUsedInFullscreen] = useState(false)
 
   // Calculate minZoom so you can never zoom out past fitting all nodes
   const minZoom = useMemo(() => {
@@ -79,6 +81,17 @@ export default function Canvas() {
     })
     ro.observe(el)
     return () => ro.disconnect()
+  }, [])
+
+  // Track fullscreen state
+  useEffect(() => {
+    const onFs = () => {
+      const fs = !!document.fullscreenElement
+      setIsFullscreen(fs)
+      if (!fs) setLockUsedInFullscreen(false)
+    }
+    document.addEventListener('fullscreenchange', onFs)
+    return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
@@ -371,7 +384,7 @@ export default function Canvas() {
   }, [save])
 
   return (
-    <div className="h-screen w-screen relative">
+    <div className="h-screen w-screen relative" onContextMenu={locked ? (e) => e.preventDefault() : undefined}>
       <div className="absolute inset-0" ref={reactFlowWrapper}>
         <ReactFlow
           nodes={nodes}
@@ -395,7 +408,6 @@ export default function Canvas() {
           nodeTypes={nodeTypes}
           fitView
           minZoom={minZoom}
-          panOnScroll
           zoomOnScroll
           panOnDrag={isEditing ? false : locked ? true : [1, 2]}
           selectionOnDrag={!isEditing && !locked}
@@ -527,7 +539,7 @@ export default function Canvas() {
             </svg>
           </button>
 
-          <button onClick={() => toggleLocked()} className={`icon-btn ${locked ? 'bg-white/20' : ''}`} title={locked ? 'Unlock' : 'Lock'}>
+          {!(isFullscreen && lockUsedInFullscreen) && <button onClick={() => { if (isFullscreen) setLockUsedInFullscreen(true); toggleLocked() }} className={`icon-btn ${locked ? 'bg-white/20' : ''}`} title={locked ? 'Unlock' : 'Lock'}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               {locked ? (
                 <>
@@ -541,7 +553,7 @@ export default function Canvas() {
                 </>
               )}
             </svg>
-          </button>
+          </button>}
         </div>
       </div>
       </div>
